@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rollup"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -54,7 +55,7 @@ func (m *mockBackend) TxPool() *core.TxPool {
 	return m.txPool
 }
 
-func (m *mockBackend) RollupBackend() RollupBackend {
+func (m *mockBackend) RollupBackend() *rollup.RollupBackend {
 	return nil
 }
 

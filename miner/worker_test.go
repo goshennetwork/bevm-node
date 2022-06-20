@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup"
 )
 
 const (
@@ -164,9 +165,9 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	}
 }
 
-func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
-func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
-func (t *testWorkerBackend) RollupBackend() RollupBackend { return nil }
+func (b *testWorkerBackend) BlockChain() *core.BlockChain         { return b.chain }
+func (b *testWorkerBackend) TxPool() *core.TxPool                 { return b.txPool }
+func (t *testWorkerBackend) RollupBackend() *rollup.RollupBackend { return nil }
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block

@@ -407,6 +407,8 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(steps)
 }
 
+const dumpStep = false
+
 func runRandTest(rt randTest) bool {
 	triedb := NewDatabase(memorydb.New())
 
@@ -414,8 +416,10 @@ func runRandTest(rt randTest) bool {
 	values := make(map[string]string) // tracks content of the trie
 
 	for i, step := range rt {
-		fmt.Printf("{op: %d, key: common.Hex2Bytes(\"%x\"), value: common.Hex2Bytes(\"%x\")}, // step %d\n",
-			step.op, step.key, step.value, i)
+		if dumpStep {
+			fmt.Printf("{op: %d, key: common.Hex2Bytes(\"%x\"), value: common.Hex2Bytes(\"%x\")}, // step %d\n",
+				step.op, step.key, step.value, i)
+		}
 		switch step.op {
 		case opUpdate:
 			tr.Update(step.key, step.value)
