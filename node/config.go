@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ontology-layer-2/rollup-contracts/config"
 )
 
 const (
@@ -194,6 +195,7 @@ type Config struct {
 	AllowUnprotectedTxs bool `toml:",omitempty"`
 
 	RollupConfig *config.RollupConfig
+	RollupVerifier bool
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

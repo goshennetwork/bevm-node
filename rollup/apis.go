@@ -1,11 +1,13 @@
 package rollup
 
 import (
-	"fmt"
-
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/consts"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ontology-layer-2/optimistic-rollup/binding"
+	"github.com/ontology-layer-2/rollup-contracts/binding"
+	"github.com/ontology-layer-2/rollup-contracts/store/schema"
 )
 
 type L2Api struct {
@@ -27,43 +29,93 @@ func newUploadApi(rollupBackend *RollupBackend) *L2Api {
 	return &L2Api{rollupBackend}
 }
 
-// fixme: now only support one sequencer.
-func (self *L2Api) GetPendingTxBatches() (*binding.RollupInputBatches, error) {
+type GlobalInfo struct {
+	//total batch num in l1 RollupInputChain contract
+	L1InputInfo schema.InputChainInfo
+	//l2 client have checked tx batch num
+	L2CheckedBatchNum uint64
+	//the total block num l2 already checked,start from 1, because genesis block do not need to check
+	L2CheckedBlockNum uint64
+	//l2 client head block num
+	L2HeadBlockNumber   uint64
+	L1SyncedBlockNumber uint64
+	L1SyncedTimestamp   *uint64
+}
+
+func (self *L2Api) GlobalInfo() *GlobalInfo {
+	//maybe syncing should also return some info
+	var ret GlobalInfo
+	l2Store := self.Store.L2Client()
+	info := self.Store.InputChain().GetInfo()
+	ret.L1InputInfo = *info
+	ret.L2CheckedBatchNum = l2Store.GetTotalCheckedBatchNum()
+	ret.L2CheckedBlockNum = l2Store.GetTotalCheckedBlockNum(info.TotalBatches)
+	ret.L2HeadBlockNumber = self.ethBackend.BlockChain().CurrentHeader().Number.Uint64()
+	ret.L1SyncedBlockNumber = self.Store.GetLastSyncedL1Height()
+	ret.L1SyncedTimestamp = self.Store.GetLastSyncedL1Timestamp()
+	return &ret
+}
+
+//fixme: now only support one sequencer.
+// GetPendingTxBatches return the batchCode, which is params in AppendBatch, set func selector in front of it to invoke
+//append input batch.
+func (self *L2Api) GetPendingTxBatches() []byte {
 	if !self.IsSynced() {
-		return nil, fmt.Errorf("syncing")
+		log.Warn("syncing")
+		return nil
 	}
-	l2Store := self.store.L2Client()
-	info := self.store.InputChain().GetInfo()
-	checkedBatchNum := l2Store.GetTotalCheckedBatchNum()
-	if checkedBatchNum < info.TotalBatches {
-		return nil, fmt.Errorf("nothing to append.maybe waitting to check")
+	info := self.GlobalInfo()
+	if info.L2CheckedBatchNum < info.L1InputInfo.TotalBatches { //should check all the batch first
+		log.Warn("nothing to append")
+		return nil
 	}
-	l2BlockNum := l2Store.GetTotalCheckedBlockNum(info.TotalBatches)
-	localNumber := self.ethBackend.BlockChain().CurrentHeader().Number.Uint64()
-	if l2BlockNum > localNumber {
+	l2CheckedBlockNum, l2HeadBlockNumber := info.L2CheckedBlockNum, info.L2HeadBlockNumber
+	if l2CheckedBlockNum > l2HeadBlockNumber {
 		//local have nothing to upload
-		return nil, fmt.Errorf("nothing need to upload total uploaded block: %d, local block number: %d", l2BlockNum, localNumber)
+		log.Warn("nothing need to upload ", "total checked block", l2CheckedBlockNum, "local block number", l2HeadBlockNumber)
+		return nil
 	}
-	floor := localNumber - l2BlockNum + 1
+	maxBlockes := l2HeadBlockNumber - l2CheckedBlockNum + 1
 	//todo: now simple limit upload size.should limit calldata size instead
-	if floor > 512 {
-		floor = 512
+	if maxBlockes > 512 {
+		maxBlockes = 512
 	}
-	batches := &binding.RollupInputBatches{QueueStart: info.PendingQueueIndex}
-	for i := uint64(0); i < floor; i++ {
-		blockNumber := i + l2BlockNum
+	batches := &binding.RollupInputBatches{QueueStart: info.L1InputInfo.PendingQueueIndex, BatchIndex: info.L2CheckedBatchNum}
+	var batchesData []byte
+	for i := uint64(0); i < maxBlockes; i++ {
+		blockNumber := i + l2CheckedBlockNum
 		block := self.ethBackend.BlockChain().GetBlockByNumber(blockNumber)
-		if block == nil {
-			return nil, fmt.Errorf("no block exist: %d", blockNumber)
+		if block == nil { // should not happen except chain reorg
+			log.Warn("nil block", "blockNumber", blockNumber)
+			return nil
 		}
 		txs := block.Transactions()
 		l2txs, queueNum := FilterOutQueues(txs)
 		batches.QueueNum += queueNum
 		if len(l2txs) > 0 {
-			batches.SubBatches = append(batches.SubBatches, &binding.SubBatch{block.Time(), l2txs})
+			batches.SubBatches = append(batches.SubBatches, &binding.SubBatch{Timestamp: block.Time(), Txs: l2txs})
+		}
+		newBatch := batches.Encode()
+		if len(newBatch)+4 < consts.MaxRollupInputBatchSize {
+			batchesData = newBatch
 		}
 	}
-	return batches, nil
+	log.Info("generate batch", "index", batches.BatchIndex, "size", len(batchesData))
+	return batchesData
+}
+
+func (self *L2Api) GetState(batchIndex uint64) common.Hash {
+	if batchIndex >= self.Store.L2Client().GetTotalCheckedBatchNum() {
+		return common.Hash{}
+	}
+	blockNum := self.Store.L2Client().GetTotalCheckedBlockNum(batchIndex)
+	index := blockNum - 1
+	block := self.ethBackend.BlockChain().GetBlockByNumber(index)
+	if block == nil {
+		log.Warn("nil block", "blockNumber", index)
+		return common.Hash{}
+	}
+	return block.Hash()
 }
 
 func FilterOutQueues(txs []*types.Transaction) ([]*types.Transaction, uint64) {

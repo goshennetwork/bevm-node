@@ -69,8 +69,8 @@ import (
 	"github.com/ethereum/go-ethereum/rollup"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	"github.com/laizy/web3/utils"
-	"github.com/ontology-layer-2/optimistic-rollup/config"
-	sync_service "github.com/ontology-layer-2/optimistic-rollup/sync-service"
+	"github.com/ontology-layer-2/rollup-contracts/config"
+	sync_service "github.com/ontology-layer-2/rollup-contracts/sync-service"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -811,6 +811,11 @@ var (
 		Usage: "specify l1 contracts config filename",
 		Value: config.DefaultContractName,
 	}
+
+	RollupVerifier = cli.BoolFlag{
+		Name:  "verifier",
+		Usage: "enable verifier mod and it will disable mine behave",
+	}
 )
 
 //set rollup config to node
@@ -823,6 +828,7 @@ func setRollupConfig(ctx *cli.Context, cfg *node.Config) {
 		var contractsConfig config.Contracts
 		utils.Ensure(utils.LoadJsonFile(ctx.GlobalString(RollupContractsConfigFile.Name), &contractsConfig))
 		cfg.RollupConfig = &config.RollupConfig{SyncConfig: syncConfig, Contracts: contractsConfig}
+		cfg.RollupVerifier = ctx.GlobalBool(RollupVerifier.Name)
 	}
 }
 

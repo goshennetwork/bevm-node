@@ -18,7 +18,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -586,10 +585,13 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	if pool.chainconfig.Layer2Instant != nil { //l2 tx pool do not accept L1CrossLayer signature message,because of hard coded
-		//in l1, here use the same is fine, maybe set it in chainConfig?
-		if tx.Protected() == false {
-			return ErrTxUnprotected
+	cfg := ValidDataTxConfig{
+		MaxGas:   pool.currentMaxGas,
+		GasPrice: pool.gasPrice,
+		BaseFee:  pool.priced.urgent.baseFee,
+		Istanbul: pool.istanbul,
+		Eip1559:  pool.eip1559,
+		Eip2718:  pool.eip2718,
 		}
 		sender, err := pool.signer.Sender(tx)
 		if err != nil {

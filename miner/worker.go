@@ -807,11 +807,6 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
-		// but try to save queue tx
-		// TODO: check whether need to revert to snapshot
-		if tx.IsQueue() {
-			w.current.txs = append(w.current.txs, tx)
-		}
 		return nil, err
 	}
 	w.current.txs = append(w.current.txs, tx)
@@ -864,6 +859,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		if tx == nil {
 			break
 		}
+		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
@@ -894,7 +890,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 
 		case errors.Is(err, core.ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Pop()
 
 		case errors.Is(err, nil):
@@ -941,6 +937,9 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 
 // commitNewWork generates several new sealing tasks based on the parent block.
 func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) {
+	if w.layer2Engine() != nil && w.eth.RollupBackend().IsVerifier { //verifier do not commit new work
+		return
+	}
 	log.Debug("miner: commit new work")
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -954,11 +953,14 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	num := parent.Number()
 
 	gasLimit := core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil)
-	var queueTxs *rollup.QueuesWithContext
+	var queueTxs *rollup.TxsWithContext
+	var pendingQueueIndex = parent.Header().TotalExecutedQueueNum()
 	var queueBlockInfo *schema.ChainedEnqueueBlockInfo
 	if w.layer2Engine() != nil {
+		//in l2 mod, gasLimit keep same
+		gasLimit = parent.GasLimit()
 		var err error
-		queueTxs, queueBlockInfo, err = w.eth.RollupBackend().GetPendingQueue(num.Uint64(), gasLimit)
+		queueTxs, err = w.eth.RollupBackend().GetPendingQueue(pendingQueueIndex, gasLimit)
 		if err != nil {
 			log.Error("get pending failed", "err", err)
 			return
@@ -972,6 +974,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		GasLimit:   gasLimit,
 		Extra:      w.extra,
 		Time:       uint64(timestamp),
+	}
+	if w.layer2Engine() != nil {
+		// set header difficulty
+		header.SetTotalExecutedQueueNum(pendingQueueIndex + uint64(len(queueTxs.Txs)))
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
@@ -1063,7 +1069,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 
 	//should run enqueue tx first to ensure tx will not failed because of reaching block gasLimit
-	if w.layer2Engine() != nil && len(queueTxs.Txs) > 0 {
+	if w.layer2Engine() != nil && len(queueTxs.Txs) != 0 {
 		w.current.QueueBlock = queueBlockInfo
 		for _, tx := range queueTxs.Txs { //more strict, check nonce correctness
 			if !tx.IsQueue() {
@@ -1126,6 +1132,13 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, s, w.current.txs, uncles, receipts)
 	if err != nil {
 		return err
+	}
+	if w.layer2Engine() != nil {
+		parent := w.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+		if block.Header().TotalExecutedQueueNum()-parent.Header().TotalExecutedQueueNum() == 0 && len(block.Transactions()) == 0 {
+			//nothing to mine
+			return fmt.Errorf("found useless block, hash: 0x%x, number: 0x%x", block.Hash(), block.Number())
+		}
 	}
 	if w.isRunning() {
 		if interval != nil {

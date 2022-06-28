@@ -35,8 +35,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/laizy/web3/jsonrpc"
 	"github.com/laizy/web3/utils"
-	"github.com/ontology-layer-2/optimistic-rollup/store/leveldbstore"
-	"github.com/ontology-layer-2/optimistic-rollup/store/schema"
+	"github.com/ontology-layer-2/rollup-contracts/store/leveldbstore"
+	"github.com/ontology-layer-2/rollup-contracts/store/schema"
 	"github.com/prometheus/tsdb/fileutil"
 )
 
@@ -68,8 +68,10 @@ type Node struct {
 }
 type RollupInfo struct {
 	//the all rollup db
-	RollupDb schema.PersistStore
-	L1Client *jsonrpc.Client
+	RollupDb   schema.PersistStore
+	DBPath     string
+	L1Client   *jsonrpc.Client
+	IsVerifier bool
 }
 
 const (
@@ -172,6 +174,8 @@ func New(conf *Config) (*Node, error) {
 		rollupDb, err := leveldbstore.NewLevelDBStore(rollupConf.SyncConfig.DbDir)
 		utils.Ensure(err)
 		node.RollupInfo.RollupDb = rollupDb
+		node.RollupInfo.DBPath = rollupConf.SyncConfig.DbDir
+		node.RollupInfo.IsVerifier = conf.RollupVerifier
 		//add rpc module
 		log.Info("open l2 http&ws module")
 		conf.HTTPModules = append(conf.HTTPModules, "l2")
