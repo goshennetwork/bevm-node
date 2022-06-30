@@ -324,6 +324,10 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
+	if w.layer2Engine() != nil && w.eth.RollupBackend().IsVerifier {
+		log.Warn("l2 verifier can't mine")
+		return
+	}
 	log.Debug("miner start running")
 	atomic.StoreInt32(&w.running, 1)
 	w.startCh <- struct{}{}
