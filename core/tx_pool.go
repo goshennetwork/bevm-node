@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -585,33 +586,15 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	cfg := ValidDataTxConfig{
-		MaxGas:   pool.currentMaxGas,
-		GasPrice: pool.gasPrice,
-		BaseFee:  pool.priced.urgent.baseFee,
-		Istanbul: pool.istanbul,
-		Eip1559:  pool.eip1559,
-		Eip2718:  pool.eip2718,
-		}
-		sender, err := pool.signer.Sender(tx)
-		if err != nil {
-			return fmt.Errorf("validate l2 tx err: %s", err)
-		}
-		if sender == consts.L1CrossLayerWitnessSender {
-			return ErrUnexpectedSystemSender
-		}
-		if tx.Nonce() >= consts.MaxSenderNonce {
-			return ErrNonceMax
-		}
-		return nil
+	sender, err := pool.signer.Sender(tx)
+	if err != nil {
+		return fmt.Errorf("validate l2 tx err: %s", err)
 	}
-	// Accept only legacy transactions until EIP-2718/2930 activates.
-	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
-		return ErrTxTypeNotSupported
+	if sender == consts.L1CrossLayerWitnessSender {
+		return ErrUnexpectedSystemSender
 	}
-	// Reject dynamic fee transactions until EIP-1559 activates.
-	if !pool.eip1559 && tx.Type() == types.DynamicFeeTxType {
-		return ErrTxTypeNotSupported
+	if tx.Nonce() >= consts.MaxSenderNonce {
+		return ErrNonceMax
 	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {

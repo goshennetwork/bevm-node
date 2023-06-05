@@ -16,18 +16,16 @@ import (
 	"github.com/laizy/log"
 	"github.com/laizy/web3/utils"
 	"github.com/ontology-layer-2/rollup-contracts/binding"
-	"github.com/ontology-layer-2/rollup-contracts/config"
 	"github.com/ontology-layer-2/rollup-contracts/store/schema"
 )
 
 type WitnessService struct {
 	*RollupBackend
-	cfg  config.SyncConfig
 	quit chan struct{}
 }
 
-func NewWitnessService(backend *RollupBackend, cfg *config.SyncConfig) *WitnessService {
-	return &WitnessService{backend, *cfg, make(chan struct{})}
+func NewWitnessService(backend *RollupBackend) *WitnessService {
+	return &WitnessService{backend, make(chan struct{})}
 }
 
 func (self *WitnessService) Start() error {
@@ -137,9 +135,6 @@ func ProcessBatch(input []byte, parentBlockHash common.Hash, rollupBackend *Roll
 	if err := batch.Decode(input); err != nil { //may decode failed, just ignore
 		log.Warn("malicious batch code found", "err", err)
 	}
-	if parent.Header().TotalExecutedQueueNum() != batch.QueueStart {
-		panic(1)
-	}
 	queues, err := inputChainStore.GetEnqueuedTransactions(batch.QueueStart, batch.QueueNum)
 	if err != nil {
 		panic(err)
@@ -206,7 +201,6 @@ func makeBlockTask(parent *types.Header, queueNum uint64, timestamp uint64, stat
 		Time:       timestamp,
 		Coinbase:   engine.(*layer2.Layer2Instant).FeeCollector,
 	}
-	h.SetTotalExecutedQueueNum(parent.TotalExecutedQueueNum() + queueNum)
 	return &blockTask{
 		header:  h,
 		statedb: stateDb.Copy(),

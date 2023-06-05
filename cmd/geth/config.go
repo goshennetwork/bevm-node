@@ -166,7 +166,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		log.Info("register sync service in l2 consensus.")
 		utils.RegisterSyncService(stack, &cfg.Node.RollupConfig.SyncConfig)
 		log.Info("register witness service in l2 consensus.")
-		utils.RegisterWitnessService(stack, eth.RollupBackend(), &cfg.Node.RollupConfig.SyncConfig)
+		utils.RegisterWitnessService(stack, eth.RollupBackend())
 	}
 
 	// Configure catalyst.

@@ -93,8 +93,5 @@ func ValidateTx(tx *types.Transaction, statedb *state.StateDB, signer types.Sign
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
-	if tx.Gas()-intrGas > consts.MaxTxExecGas {
-		return ErrExecGasTooHigh
-	}
 	return nil
 }

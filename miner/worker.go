@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rollup"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ontology-layer-2/optimistic-rollup/store/schema"
 )
 
 const (
@@ -91,19 +90,17 @@ type environment struct {
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
 
-	header     *types.Header
-	txs        []*types.Transaction
-	receipts   []*types.Receipt
-	QueueBlock *schema.ChainedEnqueueBlockInfo
+	header   *types.Header
+	txs      []*types.Transaction
+	receipts []*types.Receipt
 }
 
 // task contains all information for consensus engine sealing and result submitting.
 type task struct {
-	receipts   []*types.Receipt
-	state      *state.StateDB
-	block      *types.Block
-	createdAt  time.Time
-	queueBlock *schema.ChainedEnqueueBlockInfo
+	receipts  []*types.Receipt
+	state     *state.StateDB
+	block     *types.Block
+	createdAt time.Time
 }
 
 const (
@@ -695,10 +692,6 @@ func (w *worker) resultLoop() {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
-			if w.layer2Engine() != nil && task.queueBlock != nil { //store executed num to rollup db
-				w.eth.RollupBackend().StoreAndSetExecutedNum(task.queueBlock)
-			}
-
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
@@ -863,7 +856,6 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 		if tx == nil {
 			break
 		}
-		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
@@ -958,30 +950,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	gasLimit := core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil)
 	var queueTxs *rollup.TxsWithContext
-	var pendingQueueIndex = parent.Header().TotalExecutedQueueNum()
-	var queueBlockInfo *schema.ChainedEnqueueBlockInfo
-	if w.layer2Engine() != nil {
-		//in l2 mod, gasLimit keep same
-		gasLimit = parent.GasLimit()
-		var err error
-		queueTxs, err = w.eth.RollupBackend().GetPendingQueue(pendingQueueIndex, gasLimit)
-		if err != nil {
-			log.Error("get pending failed", "err", err)
-			return
-		}
-		//set timestamp to l1 context, either l1 newest timestamp, or enqueue txs timestamp
-		timestamp = int64(queueTxs.Timestamp)
-	}
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
 		GasLimit:   gasLimit,
 		Extra:      w.extra,
 		Time:       uint64(timestamp),
-	}
-	if w.layer2Engine() != nil {
-		// set header difficulty
-		header.SetTotalExecutedQueueNum(pendingQueueIndex + uint64(len(queueTxs.Txs)))
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
@@ -1074,7 +1048,6 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	//should run enqueue tx first to ensure tx will not failed because of reaching block gasLimit
 	if w.layer2Engine() != nil && len(queueTxs.Txs) != 0 {
-		w.current.QueueBlock = queueBlockInfo
 		for _, tx := range queueTxs.Txs { //more strict, check nonce correctness
 			if !tx.IsQueue() {
 				log.Error("queue nonce wired", "nonce", tx.Nonce(), "hash", tx.Hash())
@@ -1137,19 +1110,12 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	if w.layer2Engine() != nil {
-		parent := w.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
-		if block.Header().TotalExecutedQueueNum()-parent.Header().TotalExecutedQueueNum() == 0 && len(block.Transactions()) == 0 {
-			//nothing to mine
-			return fmt.Errorf("found useless block, hash: 0x%x, number: 0x%x", block.Hash(), block.Number())
-		}
-	}
 	if w.isRunning() {
 		if interval != nil {
 			interval()
 		}
 		select {
-		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now(), queueBlock: w.current.QueueBlock}:
+		case w.taskCh <- &task{receipts: receipts, state: s, block: block, createdAt: time.Now()}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
 			log.Info("Commit new mining work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
 				"uncles", len(uncles), "txs", w.current.tcount,
