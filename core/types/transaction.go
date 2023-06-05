@@ -128,9 +128,19 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	case err != nil:
 		return err
 	case kind == rlp.List:
+		raw, err := s.Raw()
+		if err != nil {
+			panic(err)
+		}
+		var bevm BevmTx
+		if err = rlp.DecodeBytes(raw, &bevm); err == nil {
+			tx.setDecoded(&bevm, int(rlp.ListSize(size)))
+			return nil
+		}
+
 		// It's a legacy transaction.
 		var inner LegacyTx
-		err := s.Decode(&inner)
+		err = rlp.DecodeBytes(raw, &inner)
 		if err == nil {
 			tx.setDecoded(&inner, int(rlp.ListSize(size)))
 		}

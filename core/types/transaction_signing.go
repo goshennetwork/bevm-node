@@ -139,6 +139,11 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 		}
 	}
 
+	if inner := tx.inner.(*BevmTx); inner != nil {
+		tx.from.Store(sigCache{signer: signer, from: inner.From})
+		return inner.From, nil
+	}
+
 	addr, err := signer.Sender(tx)
 	if err != nil {
 		return common.Address{}, err

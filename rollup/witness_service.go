@@ -1,8 +1,6 @@
 package rollup
 
 import (
-	"bytes"
-	"fmt"
 	"math/big"
 	"sort"
 	"time"
@@ -97,25 +95,7 @@ func (self *WitnessService) Work() error {
 	parentBlock := self.ethBackend.BlockChain().GetBlockByNumber(checkedBlockNum - 1)
 	blocks, inputHash := ProcessBatch(data, parentBlock.Hash(), self.RollupBackend)
 	utils.EnsureTrue(inputHash == input.InputHash)
-	if self.IsVerifier { //verifier store blocks
-		self.Save(blocks)
-	} else {
-		for i, blockWithReceipt := range blocks {
-			local := self.ethBackend.BlockChain().GetBlockByNumber(checkedBlockNum + uint64(i))
-			block := blockWithReceipt.b
-			if !bytes.Equal(local.Hash().Bytes(), block.Hash().Bytes()) {
-				log.Error("wrong block found", "got number", block.Number(), "local number", local.Number(), "got hash", block.Hash(), "local hash", local.Hash())
-				for _, tx := range local.Transactions() {
-					log.Info("local tx", "hash", tx.Hash(), "queue", tx.IsQueue())
-				}
-				for _, tx := range block.Transactions() {
-					log.Info("seal tx", "hash", tx.Hash(), "queue", tx.IsQueue())
-				}
-				log.Info("header", "local", utils.JsonStr(local.Header()), "got", utils.JsonStr(block.Header()))
-				return fmt.Errorf("failed")
-			}
-		}
-	}
+	self.Save(blocks)
 	checkedBlockNum += uint64(len(blocks))
 	checkedBatchNum += 1
 
