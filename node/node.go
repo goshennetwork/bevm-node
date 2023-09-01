@@ -33,10 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/laizy/web3/jsonrpc"
-	"github.com/laizy/web3/utils"
-	"github.com/ontology-layer-2/rollup-contracts/store/leveldbstore"
-	"github.com/ontology-layer-2/rollup-contracts/store/schema"
 	"github.com/prometheus/tsdb/fileutil"
 )
 
@@ -50,7 +46,6 @@ type Node struct {
 	keyDirTemp    bool              // If true, key directory will be removed by Stop
 	dirLock       fileutil.Releaser // prevents concurrent use of instance directory
 	stop          chan struct{}     // Channel to wait for termination notifications
-	server        *p2p.Server       // Currently running P2P networking layer
 	startStopLock sync.Mutex        // Start/Stop are protected by an additional lock
 	state         int               // Tracks state of node lifecycle
 
@@ -66,11 +61,10 @@ type Node struct {
 
 	RollupInfo *RollupInfo
 }
+
 type RollupInfo struct {
 	//the all rollup db
-	RollupDb   schema.PersistStore
 	DBPath     string
-	L1Client   *jsonrpc.Client
 	IsVerifier bool
 }
 
@@ -115,7 +109,6 @@ func New(conf *Config) (*Node, error) {
 		eventmux:      new(event.TypeMux),
 		log:           conf.Logger,
 		stop:          make(chan struct{}),
-		server:        &p2p.Server{Config: conf.P2P},
 		databases:     make(map[*closeTrackingDB]struct{}),
 	}
 
@@ -136,20 +129,6 @@ func New(conf *Config) (*Node, error) {
 	// are required to add the backends later on.
 	node.accman = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed})
 
-	// Initialize the p2p server. This creates the node key and discovery databases.
-	node.server.Config.PrivateKey = node.config.NodeKey()
-	node.server.Config.Name = node.config.NodeName()
-	node.server.Config.Logger = node.log
-	if node.server.Config.StaticNodes == nil {
-		node.server.Config.StaticNodes = node.config.StaticNodes()
-	}
-	if node.server.Config.TrustedNodes == nil {
-		node.server.Config.TrustedNodes = node.config.TrustedNodes()
-	}
-	if node.server.Config.NodeDatabase == "" {
-		node.server.Config.NodeDatabase = node.config.NodeDB()
-	}
-
 	// Check HTTP/WS prefixes are valid.
 	if err := validatePrefix("HTTP", conf.HTTPPathPrefix); err != nil {
 		return nil, err
@@ -163,24 +142,8 @@ func New(conf *Config) (*Node, error) {
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
-	rollupConf := conf.RollupConfig
-	if rollupConf != nil {
-		node.RollupInfo = &RollupInfo{}
-		//if not empty, try to set up rollup store
-		node.RollupInfo.L1Client, err = jsonrpc.NewClient(rollupConf.SyncConfig.L1RpcUrl)
-		if err != nil {
-			return nil, fmt.Errorf("connect l1 client failed, err: ", err)
-		}
-		rollupDb, err := leveldbstore.NewLevelDBStore(rollupConf.SyncConfig.DbDir)
-		utils.Ensure(err)
-		node.RollupInfo.RollupDb = rollupDb
-		node.RollupInfo.DBPath = rollupConf.SyncConfig.DbDir
-		node.RollupInfo.IsVerifier = conf.RollupVerifier
-		//add rpc module
-		log.Info("open l2 http&ws module")
-		conf.HTTPModules = append(conf.HTTPModules, "l2")
-		conf.WSModules = append(conf.WSModules, "l2")
-	}
+	node.RollupInfo = &RollupInfo{}
+	node.RollupInfo.IsVerifier = conf.RollupVerifier
 
 	return node, nil
 }
@@ -292,20 +255,10 @@ func (n *Node) doClose(errs []error) error {
 
 // openEndpoints starts all network and RPC endpoints.
 func (n *Node) openEndpoints() error {
-	if n.RollupInfo != nil { //in l2 consensus, do not open p2p servce
-		n.log.Info("stop peer-to-peer server in l2 mode")
-	} else {
-		// start networking endpoints
-		n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
-		if err := n.server.Start(); err != nil {
-			return convertFileLockError(err)
-		}
-	}
 	// start RPC endpoints
 	err := n.startRPC()
 	if err != nil {
 		n.stopRPC()
-		n.server.Stop()
 	}
 	return err
 }
@@ -331,11 +284,6 @@ func (n *Node) stopServices(running []Lifecycle) error {
 		if err := running[i].Stop(); err != nil {
 			failure.Services[reflect.TypeOf(running[i])] = err
 		}
-	}
-
-	if n.RollupInfo == nil { //l2 protocol do not start p2p ever
-		// Stop p2p networking.
-		n.server.Stop()
 	}
 
 	if len(failure.Services) > 0 {
@@ -476,13 +424,6 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 
 // RegisterProtocols adds backend's protocols to the node's p2p server.
 func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	if n.state != initializingState {
-		panic("can't register protocols on running/stopped node")
-	}
-	n.server.Protocols = append(n.server.Protocols, protocols...)
 }
 
 // RegisterAPIs registers the APIs a service provides on the node.
@@ -540,7 +481,7 @@ func (n *Node) Server() *p2p.Server {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	return n.server
+	return nil
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.

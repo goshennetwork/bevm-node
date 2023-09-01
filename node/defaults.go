@@ -40,11 +40,11 @@ const (
 var DefaultConfig = Config{
 	DataDir:             DefaultDataDir(),
 	HTTPPort:            DefaultHTTPPort,
-	HTTPModules:         []string{"net", "web3"},
+	HTTPModules:         []string{"web3"},
 	HTTPVirtualHosts:    []string{"localhost"},
 	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,
 	WSPort:              DefaultWSPort,
-	WSModules:           []string{"net", "web3"},
+	WSModules:           []string{"web3"},
 	GraphQLVirtualHosts: []string{"localhost"},
 	P2P: p2p.Config{
 		ListenAddr: ":30303",

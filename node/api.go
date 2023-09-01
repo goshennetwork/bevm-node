@@ -333,7 +333,7 @@ type publicWeb3API struct {
 
 // ClientVersion returns the node name
 func (s *publicWeb3API) ClientVersion() string {
-	return s.stack.Server().Name
+	return s.stack.config.Name
 }
 
 // Sha3 applies the ethereum sha3 implementation on the input.

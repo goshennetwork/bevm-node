@@ -215,7 +215,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		return clique.New(chainConfig.Clique, db)
 	}
 	if chainConfig.Layer2Instant != nil {
-		return layer2.New(chainConfig.Layer2Instant, db)
+		return layer2.New(chainConfig.Layer2Instant)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {

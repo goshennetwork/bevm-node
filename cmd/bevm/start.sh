@@ -1,0 +1,1 @@
+./bevm --datadir ./data --networkid 21772 --verbosity=3 --gcmode archive --ipcdisable --http --http.addr 0.0.0.0 --http.api "eth,web3,txpool,debug" --btc.host "172.22.0.1:8332" --btc.user onchain --btc.pass onchain --http.port 8545 --ws --ws.addr 0.0.0.0 --syncmode full --snapshot=false

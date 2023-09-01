@@ -727,10 +727,10 @@ func (s *PublicBlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.H
 }
 
 // GetBlockByNumber returns the requested canonical block.
-// * When blockNr is -1 the chain head is returned.
-// * When blockNr is -2 the pending chain head is returned.
-// * When fullTx is true all transactions in the block are returned, otherwise
-//   only the transaction hash is returned.
+//   - When blockNr is -1 the chain head is returned.
+//   - When blockNr is -2 the pending chain head is returned.
+//   - When fullTx is true all transactions in the block are returned, otherwise
+//     only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := s.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
@@ -2036,16 +2036,6 @@ type PublicNetAPI struct {
 // NewPublicNetAPI creates a new net API instance.
 func NewPublicNetAPI(net *p2p.Server, networkVersion uint64) *PublicNetAPI {
 	return &PublicNetAPI{net, networkVersion}
-}
-
-// Listening returns an indication if the node is listening for network connections.
-func (s *PublicNetAPI) Listening() bool {
-	return true // always listening
-}
-
-// PeerCount returns the number of connected peers
-func (s *PublicNetAPI) PeerCount() hexutil.Uint {
-	return hexutil.Uint(s.net.PeerCount())
 }
 
 // Version returns the current ethereum protocol version.

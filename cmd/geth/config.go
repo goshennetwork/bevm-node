@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/consensus/layer2"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -160,14 +159,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		cfg.Eth.OverrideArrowGlacier = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideArrowGlacierFlag.Name))
 	}
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
-
-	//if consensus is l2, register rollup service
-	if _, ok := backend.Engine().(*layer2.Layer2Instant); ok {
-		log.Info("register sync service in l2 consensus.")
-		utils.RegisterSyncService(stack, &cfg.Node.RollupConfig.SyncConfig)
-		log.Info("register witness service in l2 consensus.")
-		utils.RegisterWitnessService(stack, eth.RollupBackend())
-	}
 
 	// Configure catalyst.
 	if ctx.GlobalBool(utils.CatalystFlag.Name) {

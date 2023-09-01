@@ -66,11 +66,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rollup"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	"github.com/laizy/web3/utils"
 	"github.com/ontology-layer-2/rollup-contracts/config"
-	sync_service "github.com/ontology-layer-2/rollup-contracts/sync-service"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -827,7 +825,6 @@ func setRollupConfig(ctx *cli.Context, cfg *node.Config) {
 		utils.Ensure(utils.LoadJsonFile(ctx.GlobalString(RollupSyncConfigFile.Name), &syncConfig))
 		var contractsConfig config.Contracts
 		utils.Ensure(utils.LoadJsonFile(ctx.GlobalString(RollupContractsConfigFile.Name), &contractsConfig))
-		cfg.RollupConfig = &config.RollupConfig{SyncConfig: syncConfig, Contracts: contractsConfig}
 		cfg.RollupVerifier = ctx.GlobalBool(RollupVerifier.Name)
 	}
 }
@@ -1769,18 +1766,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
-}
-
-func RegisterSyncService(stack *node.Node, cfg *config.SyncConfig) {
-	syncService := sync_service.NewSyncService(stack.RollupInfo.RollupDb, stack.RollupInfo.L1Client, cfg)
-	//todo api registered here
-	//stack.RegisterAPIs()
-	stack.RegisterLifecycle(syncService)
-}
-
-func RegisterWitnessService(stack *node.Node, rollupBackend *rollup.RollupBackend) {
-	witnessService := rollup.NewWitnessService(rollupBackend)
-	stack.RegisterLifecycle(witnessService)
 }
 
 // RegisterEthStatsService configures the Ethereum Stats daemon and adds it to

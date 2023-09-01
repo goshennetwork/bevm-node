@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/layer2"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -23,7 +22,7 @@ type Layer2Instant struct {
 	FeeCollector        common.Address
 }
 
-func New(config *params.Layer2InstantConfig, db ethdb.Database) *Layer2Instant {
+func New(config *params.Layer2InstantConfig) *Layer2Instant {
 	return &Layer2Instant{
 		Timestamp:           uint64(time.Now().Unix()),
 		L2CrossLayerWitness: config.L2CrossLayerWitness,
@@ -39,14 +38,14 @@ func (self *Layer2Instant) verifyHeader(header, parent *types.Header) error {
 	if header.Coinbase != self.FeeCollector {
 		return fmt.Errorf("invalid coinbase, expected: %s, found: %s", self.FeeCollector, header.Coinbase)
 	}
-	if header.Difficulty.Sign() != 0 {
-		return fmt.Errorf("invalid difficulty, expected: 0, found: %d", header.Difficulty)
-	}
 	if len(header.Extra) != 0 {
 		return fmt.Errorf("extra data not nil, found: %x", header.Extra)
 	}
 
 	currNumber := header.Number.Uint64()
+	if currNumber == 0 {
+		return nil
+	}
 	if parent == nil || parent.Number.Uint64() != currNumber-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
@@ -93,7 +92,7 @@ func (self *Layer2Instant) VerifyHeaders(chain consensus.ChainHeaderReader, head
 // VerifyUncles verifies that the given block's uncles conform to the consensus
 // rules of a given engine.
 func (self *Layer2Instant) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	if block.UncleHash() != types.CalcUncleHash(nil) || len(block.Uncles()) > 0 {
+	if len(block.Uncles()) > 0 {
 		return errors.New("uncles not allowed")
 	}
 

@@ -3,6 +3,7 @@
 package types
 
 import (
+	"github.com/ethereum/go-ethereum/common/consts"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,7 +42,7 @@ func (tx *BevmTx) gasPrice() *big.Int     { return big.NewInt(0) }
 func (tx *BevmTx) gasTipCap() *big.Int    { return big.NewInt(0) }
 func (tx *BevmTx) gasFeeCap() *big.Int    { return big.NewInt(0) }
 func (tx *BevmTx) value() *big.Int        { return big.NewInt(0) }
-func (tx *BevmTx) nonce() uint64          { return 0 }
+func (tx *BevmTx) nonce() uint64          { return consts.InitialEnqueueNonceNonce }
 func (tx *BevmTx) to() *common.Address    { return tx.To }
 
 func (tx *BevmTx) rawSignatureValues() (v, r, s *big.Int) {

@@ -64,6 +64,7 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 		GasLimit   *math.HexOrDecimal64                        `json:"gasLimit"   gencodec:"required"`
 		Difficulty *math.HexOrDecimal256                       `json:"difficulty" gencodec:"required"`
 		Mixhash    *common.Hash                                `json:"mixHash"`
+		UncleHash    *common.Hash                                `json:"uncleHash"`
 		Coinbase   *common.Address                             `json:"coinbase"`
 		Alloc      map[common.UnprefixedAddress]GenesisAccount `json:"alloc"      gencodec:"required"`
 		Number     *math.HexOrDecimal64                        `json:"number"`
@@ -97,6 +98,9 @@ func (g *Genesis) UnmarshalJSON(input []byte) error {
 	g.Difficulty = (*big.Int)(dec.Difficulty)
 	if dec.Mixhash != nil {
 		g.Mixhash = *dec.Mixhash
+	}
+	if dec.UncleHash != nil {
+		g.UncleHash = *dec.UncleHash
 	}
 	if dec.Coinbase != nil {
 		g.Coinbase = *dec.Coinbase

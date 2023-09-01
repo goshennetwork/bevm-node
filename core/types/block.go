@@ -20,6 +20,7 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"math/big"
 	"reflect"
@@ -208,8 +209,12 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		b.header.Bloom = CreateBloom(receipts)
 	}
 
+	log.Info("block hash", "uncle", b.header.UncleHash)
+	emptyHash := common.Hash{}
 	if len(uncles) == 0 {
-		b.header.UncleHash = EmptyUncleHash
+		if b.header.UncleHash == emptyHash {
+			b.header.UncleHash = EmptyUncleHash
+		}
 	} else {
 		b.header.UncleHash = CalcUncleHash(uncles)
 		b.uncles = make([]*Header, len(uncles))
@@ -217,6 +222,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}
+	log.Info("block hash", "uncle", b.header.UncleHash)
 
 	return b
 }
